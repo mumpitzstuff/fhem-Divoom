@@ -1,5 +1,6 @@
 Divoom Timebix/Aurabox command reference
 
+
 Switch Screen: 45
   -> Clock: 00
     -> Format 12/24h (optional): 00 - 01
