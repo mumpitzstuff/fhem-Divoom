@@ -1,5 +1,6 @@
-#Divoom Timebix/Aurabox command reference  
-  
+# Divoom Timebox/Aurabox command reference  
+
+```
 Switch Screen: 45  
   -> Clock: 00  
     -> Format 12/24h (optional): 00 - 01  
@@ -129,3 +130,4 @@ Get Calendar: 53
 Set Weather: 5F  
   -> Temperature: 00 - FF  
   -> Animation (00, >=13 = special demo mode?): 00 - FF  
+```
