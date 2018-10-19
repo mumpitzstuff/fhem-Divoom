@@ -1,4 +1,4 @@
-# Divoom Timebix/Aurabox command reference  
+# Divoom Timebox/Aurabox command reference  
 
 ```
 Switch Screen: 45  
