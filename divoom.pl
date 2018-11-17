@@ -7,7 +7,7 @@ use IO::Select;
 use Imager;
 
 sub listDevices();
-sub connectDivoom($);
+sub connectDivoom($;$);
 sub disconnectDivoom();
 sub sendRaw($$;$);
 sub sendPlain($$;$);
@@ -32,18 +32,23 @@ sub listDevices()
   print "done\n\n";
 }
 
+# aurabox, timebox = port 4
+# timebox evo = port 1
 sub connectDivoom($)
 {
   my $device = shift;
+  my $port = shift;
   my $ret;
   my $success = 0;
 
   print "Create RFCOMM client ($device)...\n";
 
+  $port = 4 if (!defined($port));
+  
   $socket = Net::Bluetooth->newsocket("RFCOMM");
   return $success unless(defined($socket));
   
-  if (0 != $socket->connect($device, 4)) 
+  if (0 != $socket->connect($device, $port)) 
   {
     $socket->close();
     return $success;
@@ -51,21 +56,29 @@ sub connectDivoom($)
 
   $TIMEBOX = $socket->perlfh();
   
-  sysread($TIMEBOX, $ret, 256);
-  if (defined($ret))
+  # timebox evo do not send anything on connect
+  if (4 == $port)
   {
-    $ret =~ s/[^[:print:]]//g;
-    print "Device answer: $ret";
+    sysread($TIMEBOX, $ret, 256);
+    if (defined($ret))
+    {
+      $ret =~ s/[^[:print:]]//g;
+      print "Device answer: $ret";
 
-    if ('HELLO' eq $ret)
-    {
-      $success = 1;
+      if ('HELLO' eq $ret)
+      {
+        $success = 1;
+      }
+      else
+      {
+        close($TIMEBOX);
+        $socket->close();
+      }
     }
-    else
-    {
-      close($TIMEBOX);
-      $socket->close();
-    }
+  }
+  else
+  {
+    $success = 1;
   }
   
   print "\ndone\n\n";
@@ -91,6 +104,15 @@ sub sendRaw($$;$)
   print "Send raw command: $data\n";
 
   $response = 1 if (!defined($response));
+  
+  # remove prefix and postfix
+  $data = substr($data, 2, -2);
+  
+  # escape data if needed
+  $data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
+
+  # add prefix and postfix
+  $data = '01'.$data.'02';
 
   $data =~ s/((?:[0-9a-fA-F]{2})+)/pack('H*', $1)/ge;
   
