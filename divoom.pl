@@ -34,7 +34,7 @@ sub listDevices()
 
 # aurabox, timebox = port 4
 # timebox evo = port 1
-sub connectDivoom($)
+sub connectDivoom($;$)
 {
   my $device = shift;
   my $port = shift;
@@ -106,13 +106,13 @@ sub sendRaw($$;$)
   $response = 1 if (!defined($response));
   
   # remove prefix and postfix
-  $data = substr($data, 2, -2);
+  #$data = substr($data, 2, -2);
   
   # escape data if needed
-  $data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
+  #$data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
 
   # add prefix and postfix
-  $data = '01'.$data.'02';
+  #$data = '01'.$data.'02';
 
   $data =~ s/((?:[0-9a-fA-F]{2})+)/pack('H*', $1)/ge;
   
