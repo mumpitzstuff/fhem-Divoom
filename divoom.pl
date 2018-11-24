@@ -17,6 +17,9 @@ sub convertImageAB($;$);
 
 my $socket;
 my $TIMEBOX;
+# 0 = disable escape sequences (use it for devices like timebox evo) 
+# 1 = enable escape sequences (use it for devices like aurabox, timebox or timebox mini)
+my $escaped = 1;
 
 sub listDevices()
 {
@@ -32,8 +35,8 @@ sub listDevices()
   print "done\n\n";
 }
 
-# aurabox, timebox = port 4
-# timebox evo = port 1
+# the optional port parameter must be set to 1 for new devices like timebox evo
+# default: port 4 for aurabox, timebox and timebox mini will be used
 sub connectDivoom($;$)
 {
   my $device = shift;
@@ -41,14 +44,14 @@ sub connectDivoom($;$)
   my $ret;
   my $success = 0;
 
-  print "Create RFCOMM client ($device)...\n";
-
   $port = 4 if (!defined($port));
+  
+  print "Create RFCOMM client ($device with port $port)...\n";
   
   $socket = Net::Bluetooth->newsocket("RFCOMM");
   return $success unless(defined($socket));
   
-  if (0 != $socket->connect($device, $port)) 
+  if (0 != $socket->connect($device, $port))
   {
     $socket->close();
     return $success;
@@ -105,14 +108,18 @@ sub sendRaw($$;$)
 
   $response = 1 if (!defined($response));
   
-  # remove prefix and postfix
-  #$data = substr($data, 2, -2);
+  # needs rework
+  if (0 != $escaped)
+  {
+    # remove prefix and postfix
+    #$data = substr($data, 2, -2);
   
-  # escape data if needed
-  #$data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
+    # escape data if needed
+    #$data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
 
-  # add prefix and postfix
-  #$data = '01'.$data.'02';
+    # add prefix and postfix
+    #$data = '01'.$data.'02';
+  }
 
   $data =~ s/((?:[0-9a-fA-F]{2})+)/pack('H*', $1)/ge;
   
@@ -174,9 +181,12 @@ sub sendPlain($$;$)
   # add crc
   $data .= sprintf("%02x", ($crc & 0xFF)).sprintf("%02x", (($crc >> 8) & 0xFF));  
 
-  # escape data
-  $data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
-
+  if (0 != $escaped)
+  {
+    # escape data
+    $data =~ s/(01|02|03)(?{ if (0 == ($-[0] & 1)) {'030'.(3+$1)} else {$1} })/$^R/g;
+  }
+    
   # add prefix and postfix
   $data = '01'.$data.'02';
 
@@ -194,8 +204,11 @@ sub convertRawToPlain($)
   # remove prefix and postfix
   $data = substr($data, 2, -2);
 
-  # unescape data
-  $data =~ s/(03(04|05|06))(?{ if (0 == ($-[0] & 1)) {'0'.($2-3)} else {$1} })/$^R/g;
+  if (0 != $escaped)
+  {
+    # unescape data
+    $data =~ s/(03(04|05|06))(?{ if (0 == ($-[0] & 1)) {'0'.($2-3)} else {$1} })/$^R/g;
+  }
   
   #remove length
   $data = substr($data, 4);
@@ -349,25 +362,4 @@ sub convertImageAB($;$)
   return $_;
 }
 
-my $pic1 = convertImageTB('1.png', 11);
-my $pic2 = convertImageTB('2.png', 11);
-my $pic3 = convertImageTB('3.png', 11);
-my $pic4 = convertImageTB('4.png', 11);
-my $pic5 = convertImageTB('5.png', 11);
-my $pic6 = convertImageTB('6.png', 11);
-my $pic7 = convertImageTB('7.png', 11);
-my $pic8 = convertImageTB('8.png', 11);
-
-if (connectDivoom('11:75:58:4F:A1:CB'))
-{
-  sendPlain('4500', 5);
-  sendPlain('49000A0A040000'.$pic1, 0, 0);
-  sendPlain('49000A0A040100'.$pic2, 0, 0);
-  sendPlain('49000A0A040200'.$pic3, 0, 0);
-  sendPlain('49000A0A040300'.$pic4, 0, 0);
-  sendPlain('49000A0A040400'.$pic5, 0, 0);
-  sendPlain('49000A0A040500'.$pic6, 0, 0);
-  sendPlain('49000A0A040600'.$pic7, 0, 0);
-  sendPlain('49000A0A040700'.$pic8, 20, 0);
-  disconnectDivoom();
-}
+1;
