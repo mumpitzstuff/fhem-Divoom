@@ -170,7 +170,7 @@ sub sendPlain($$;$)
 
   # add length (length of data + length of checksum)
   $_ = (length($data) + 4) / 2;
-  $data = sprintf("%02x", ($_ & 0xFF)).sprintf("%02x", (($_ >> 8) & 0xFF)).$data;
+  $data = sprintf("%02X", ($_ & 0xFF)).sprintf("%02X", (($_ >> 8) & 0xFF)).$data;
 
   # calculate crc
   while ($data =~ /(..)/g)
@@ -179,7 +179,7 @@ sub sendPlain($$;$)
   }
 
   # add crc
-  $data .= sprintf("%02x", ($crc & 0xFF)).sprintf("%02x", (($crc >> 8) & 0xFF));  
+  $data .= sprintf("%02X", ($crc & 0xFF)).sprintf("%02X", (($crc >> 8) & 0xFF));  
 
   if (0 != $escaped)
   {
@@ -294,11 +294,98 @@ sub convertImageTB($;$)
   $_ = '';
   foreach my $byte (@imgData)
   {
-    $_ .= sprintf("%02x", ($byte & 0xFF));
+    $_ .= sprintf("%02X", ($byte & 0xFF));
   }
 
   return $_;
 }
+
+
+sub convertImageTBEVO($;$)
+{
+  my $file = shift;
+  my $size = shift;
+  my %colors = ();
+  my $imgData = '';
+  my $image = Imager->new;
+  my $bits;
+  my $counter = 0;
+  
+  @_ = ();
+  
+  $size = 16 if (!defined($size));
+  $image->read(file=>$file) or die "Can't read image ".$file." (".$image->errstr.")\n";
+  
+  if ('paletted' eq $image->type)
+  {
+    print "Image: ".$image->getheight()."x".$image->getwidth()." (maxcolors: ".$image->maxcolors.", usedcolors: ".$image->getcolorcount().")\n";
+  }
+  else
+  {
+    print "Image: ".$image->getheight()."x".$image->getwidth()." (maxcolors: no palette found, usedcolors: ".$image->getcolorcount().")\n";
+  }
+
+  if (defined($image))
+  {
+    my ($r, $g, $b, $a);
+
+    if (($size != $image->getheight()) || ($size != $image->getwidth()))
+    {
+      $image = $image->scaleX(pixels=>$size)->scaleY(pixels=>$size);
+    }
+    
+    for (my $y = 0; $y < $size; $y++)
+    {
+      for (my $x = 0; $x < $size; $x++)
+      {
+        ($r, $g, $b, $a) = $image->getpixel(x=>$x, y=>$y)->rgba();
+        #$_ = sprintf("%02X%02X%02X", $r, $g, $b);
+        $_ = ($r << 16) + ($g << 8) + $b;
+        
+        if (!exists($colors{$_}))
+        {
+          # store color within hash
+          $colors{$_} = $counter;
+          
+          # store pixel as color index
+          push(@_, $counter);
+          
+          $counter++; 
+        }
+        else
+        {
+          # store pixel as color index
+          push(@_, $colors{$_});
+        }
+      }
+    }
+  }
+  else
+  {
+    print "Error: Loading image failed!\n";
+  }
+
+  $bits = ($counter / 2) + ($counter % 2);
+  
+  foreach (@_)
+  {
+    $imgData .= substr(unpack('b*', pack('C*', $_)), 0, $bits);
+  }
+
+  # number of colors
+  $_ = sprintf("%02X", $counter);
+  # color codes
+  foreach my $color (sort { $colors{$a} <=> $colors{$b} } keys %colors) 
+  {
+    #$_ .= $color;
+    $_ .= sprintf("%06X", $color);
+  }
+  # RLE encoded image data
+  $_ .= unpack('H*', pack('b*', $imgData));
+  
+  return $_;
+}
+
 
 sub convertImageAB($;$)
 {
@@ -306,7 +393,7 @@ sub convertImageAB($;$)
   my $size = shift;
   my @imgData = ();
   my $image = Imager->new;
-  my @color = (0, 1, 2, 11, 4, 5, 2, 5, 8, 1, 2, 3, 4, 13, 6, 7); 
+  my @color = (0, 1, 2, 11, 4, 5, 2, 15, 8, 1, 2, 3, 4, 13, 6, 7); 
 
   $size = 10;# if (!defined($size));
   $image->read(file=>$file) or die "Can't read image ".$file." (".$image->errstr.")\n";
@@ -356,7 +443,7 @@ sub convertImageAB($;$)
   $_ = '';
   foreach my $byte (@imgData)
   {
-    $_ .= sprintf("%02x", ($byte & 0xFF));
+    $_ .= sprintf("%02X", ($byte & 0xFF));
   }
 
   return $_;
