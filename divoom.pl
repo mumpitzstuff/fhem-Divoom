@@ -13,6 +13,7 @@ sub sendRaw($$;$);
 sub sendPlain($$;$);
 sub convertRawToPlain($);
 sub convertImageTB($;$);
+sub convertImageTBEVO($;$);
 sub convertImageAB($;$);
 
 my $socket;
@@ -365,7 +366,9 @@ sub convertImageTBEVO($;$)
     print "Error: Loading image failed!\n";
   }
 
-  $bits = ($counter / 2) + ($counter % 2);
+  $_ = log($counter) / log(2);
+  $bits = ($_ == int($_)) ? $_ : int($_ + 1);
+  $bits = 1 if (0 == $bits);
   
   foreach (@_)
   {
