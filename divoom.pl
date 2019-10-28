@@ -5,6 +5,7 @@ use Time::HiRes;
 use Net::Bluetooth;
 use IO::Select;
 use Imager;
+use GD;
 
 sub listDevices();
 sub connectDivoom($;$);
@@ -15,12 +16,18 @@ sub convertRawToPlain($);
 sub convertImageTB($;$);
 sub convertImageTBEVO($;$);
 sub convertImageAB($;$);
+sub readAnimatedGif($);
+sub resizePicture($$$$);
+
 
 my $socket;
 my $TIMEBOX;
 # 0 = disable escape sequences (use it for devices like timebox evo) 
 # 1 = enable escape sequences (use it for devices like aurabox, timebox or timebox mini)
 my $escaped = 1;
+
+GD::Image->trueColor(1);
+
 
 sub listDevices()
 {
@@ -227,31 +234,41 @@ sub convertImageTB($;$)
   my $file = shift;
   my $size = shift;
   my @imgData = (0);
-  my $image = Imager->new;
+  my $image = GD::Image->new($file) or die "Can't read image $file\n";
   
   $size = 11 if (!defined($size));
-  $image->read(file=>$file) or die "Can't read image ".$file." (".$image->errstr.")\n";
   
-  if ('paletted' eq $image->type)
-  {
-    print "Image: ".$image->getheight()."x".$image->getwidth()." (maxcolors: ".$image->maxcolors.", usedcolors: ".$image->getcolorcount().")\n";
-  }
-  else
-  {
-    print "Image: ".$image->getheight()."x".$image->getwidth()." (maxcolors: no palette found, usedcolors: ".$image->getcolorcount().")\n";
-  }
-
   if (defined($image))
   {
+    my $index;
     my ($r, $g, $b, $a);
     my $flicflac = 0;    
-    my $imageResized = $image->scaleX(pixels=>$size)->scaleY(pixels=>$size); 
+        
+    print "Image: ".$file." (".$image->height."x".$image->width.")\n";
+    
+    if (($size != $image->height) || ($size != $image->width))
+    {
+      my $k_h = $size / $image->height;
+      my $k_w = $size / $image->width;
+      my $k   = ($k_h < $k_w ? $k_h : $k_w);
+      my $height = int($image->height * $k);
+      my $width  = int($image->width * $k);
+      my $newimage = GD::Image->new($width, $height);
+      
+      $newimage->alphaBlending(0);
+      $newimage->saveAlpha(1);
+      $newimage->copyResampled($image, 0, 0, 0, 0, $width, $height, $image->width, $image->height);
+      
+      $image = $newimage;
+    }
 
     for (my $y = 0; $y < $size; $y++)
     {
       for (my $x = 0; $x < $size; $x++)
       {
-        ($r, $g, $b, $a) = $imageResized->getpixel(x=>$x, y=>$y)->rgba();
+        $index = $image->getPixel($x, $y);
+        ($r, $g, $b) = $image->rgb($index);
+        $a = $image->alpha($index);
         
         if (0 == $flicflac)
         {
@@ -308,38 +325,43 @@ sub convertImageTBEVO($;$)
   my $size = shift;
   my %colors = ();
   my $imgData = '';
-  my $image = Imager->new;
   my $bits;
   my $counter = 0;
+  my $image = GD::Image->new($file) or die "Can't read image $file\n";
   
   @_ = ();
   
   $size = 16 if (!defined($size));
-  $image->read(file=>$file) or die "Can't read image ".$file." (".$image->errstr.")\n";
-  
-  if ('paletted' eq $image->type)
-  {
-    print "Image: ".$image->getheight()."x".$image->getwidth()." (maxcolors: ".$image->maxcolors.", usedcolors: ".$image->getcolorcount().")\n";
-  }
-  else
-  {
-    print "Image: ".$image->getheight()."x".$image->getwidth()." (maxcolors: no palette found, usedcolors: ".$image->getcolorcount().")\n";
-  }
-
+    
   if (defined($image))
   {
+    my $index;
     my ($r, $g, $b, $a);
 
-    if (($size != $image->getheight()) || ($size != $image->getwidth()))
+    print "Image: ".$file." (".$image->height."x".$image->width.")\n";
+    
+    if (($size != $image->height) || ($size != $image->width))
     {
-      $image = $image->scaleX(pixels=>$size)->scaleY(pixels=>$size);
+      my $k_h = $size / $image->height;
+      my $k_w = $size / $image->width;
+      my $k   = ($k_h < $k_w ? $k_h : $k_w);
+      my $height = int($image->height * $k);
+      my $width  = int($image->width * $k);
+      my $newimage = GD::Image->new($width, $height);
+      
+      $newimage->alphaBlending(0);
+      $newimage->saveAlpha(1);
+      $newimage->copyResampled($image, 0, 0, 0, 0, $width, $height, $image->width, $image->height);
+      
+      $image = $newimage;
     }
     
     for (my $y = 0; $y < $size; $y++)
     {
       for (my $x = 0; $x < $size; $x++)
       {
-        ($r, $g, $b, $a) = $image->getpixel(x=>$x, y=>$y)->rgba();
+        $index = $image->getPixel($x, $y);
+        ($r, $g, $b) = $image->rgb($index);
         #$_ = sprintf("%02X%02X%02X", $r, $g, $b);
         $_ = ($r << 16) + ($g << 8) + $b;
         
@@ -398,7 +420,7 @@ sub convertImageAB($;$)
   my $image = Imager->new;
   my @color = (0, 1, 2, 11, 4, 5, 2, 15, 8, 1, 2, 3, 4, 13, 6, 7); 
 
-  $size = 10;# if (!defined($size));
+  $size = 10;
   $image->read(file=>$file) or die "Can't read image ".$file." (".$image->errstr.")\n";
 
   if ('paletted' eq $image->type)
@@ -413,7 +435,6 @@ sub convertImageAB($;$)
   if (defined($image))
   {
     my $flicflac = 0;
-    #my $imageResized = $image->scaleX(pixels=>$size)->scaleY(pixels=>$size);
 
     for (my $y = 0; $y < $size; $y++)
     {
@@ -450,6 +471,43 @@ sub convertImageAB($;$)
   }
 
   return $_;
+}
+
+
+sub readAnimatedGif($)
+{
+  my $file = shift;
+  my @images = Imager->read_multi(file=>$file) or die "Can't read image ".$file." (".Imager->errstr.")\n"; 
+  my @png = () x scalar(@images);
+  
+  for (my $i = 0; $i < scalar(@images); $i++)
+  {
+    print "Frame ".$i.": ".$images[$i]->getheight()."x".$images[$i]->getwidth()."\n";
+    $images[$i]->write(data=>\$png[$i], type=>'png');  
+  }
+  
+  return @png;
+}
+
+
+sub resizePicture($$$$)
+{
+  my ($inputfile, $width, $height, $outputfile) = @_;
+  my $gdo = GD::Image->new($inputfile);
+  my $k_h = $height / $gdo->height;
+  my $k_w = $width / $gdo->width;
+  my $k   = ($k_h < $k_w ? $k_h : $k_w);
+  $height = int($gdo->height * $k);
+  $width  = int($gdo->width * $k);
+  my $image = GD::Image->new($width, $height);
+  $image->alphaBlending(0);
+  $image->saveAlpha(1);
+  $image->copyResampled($gdo, 0, 0, 0, 0, $width, $height, $gdo->width, $gdo->height);
+
+  open my $FH, '>', $outputfile;
+  binmode $FH;
+  print {$FH} $image->png;
+  close $FH;
 }
 
 1;
